@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Ideogram 4 - natural-language TE LoRA benchmark</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>:root{--rail:300px}
+
+* { box-sizing:border-box; }
+html, body { height:100%; overflow:hidden; }
+body { margin:0; background:#07080a; color:#e6e7ea;
+       font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+kbd { background:#20232a; border:1px solid #33363f; border-radius:4px; padding:1px 5px;
+      font:11px ui-monospace,monospace; color:#c3c6cf; }
+
+/* ---------- zoom canvas ---------- */
+.stage { position:fixed; inset:0 var(--rail) 0 0; overflow:hidden; cursor:grab;
+         touch-action:none; background:#07080a; }
+.stage.drag { cursor:grabbing; }
+.stack { position:absolute; inset:0; transform-origin:center center; will-change:transform; }
+.stack img { position:absolute; inset:0; margin:auto; max-width:100%; max-height:100%;
+             width:auto; height:auto; opacity:0; image-rendering:auto;
+             -webkit-user-drag:none; user-select:none; }
+.stack img.on { opacity:1; }
+.stack.px img { image-rendering:pixelated; }
+
+/* ---------- top bar ---------- */
+.bar { position:fixed; top:0; left:0; right:var(--rail); z-index:20; display:flex;
+       align-items:center; gap:12px; padding:10px 14px; font-size:13px;
+       background:linear-gradient(#07080ae6,#07080a00); pointer-events:none; }
+.bar > * { pointer-events:auto; }
+.bar .vid { font-family:ui-monospace,monospace; color:#7aa2ff; min-width:78px; }
+.bar .nm { color:#8b8f9a; font-family:ui-monospace,monospace; font-size:12px; }
+.bar .zm { color:#6b6f7a; font-family:ui-monospace,monospace; font-size:12px;
+           min-width:52px; text-align:right; }
+.bar .sp { margin-left:auto; }
+.bar button { background:#14161bcc; border:1px solid #2a2d35; color:#a9adb8; border-radius:6px;
+              padding:4px 10px; font-size:12px; cursor:pointer; font-family:inherit; }
+.bar button:hover { border-color:#7aa2ff; color:#fff; }
+/* the barely-there reset affordance */
+.bar .reset { font:13px/1 ui-monospace,monospace; letter-spacing:1px; padding:5px 9px;
+              background:none; border-color:#20232a; color:#3f434d; opacity:.55;
+              transition:opacity .15s,color .15s,border-color .15s; }
+.bar .reset:hover { opacity:1; color:#7aa2ff; border-color:#7aa2ff; }
+.bar .reset.live { opacity:1; color:#8b8f9a; border-color:#33363f; }
+
+/* ---------- rail ---------- */
+.rail { position:fixed; top:0; right:0; bottom:0; width:var(--rail); z-index:30;
+        background:#0d0f13; border-left:1px solid #1d1f25; overflow:hidden; }
+.railinner { padding:10px 10px 24px; }
+.railhint { color:#5b5f6a; font-size:11px; line-height:1.5; padding:2px 2px 10px; }
+.railrow { margin-bottom:12px; }
+.railrow.cur .rlabel { color:#7aa2ff; }
+.rlabel { font:11px ui-monospace,monospace; color:#6b6f7a; padding:0 2px 4px;
+          display:flex; justify-content:space-between; gap:6px; }
+.thumbs { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; }
+.thumb { position:relative; padding:0; border:1px solid #2a2d35; background:#000; border-radius:4px;
+         overflow:hidden; cursor:pointer; aspect-ratio:1/1; }
+.thumb img { width:100%; height:100%; object-fit:cover; display:block; opacity:.7; }
+.thumb:hover img, .thumb.sel img { opacity:1; }
+.thumb:hover { border-color:#7aa2ff; }
+.thumb.sel { border-color:#7aa2ff; box-shadow:0 0 0 1px #7aa2ff inset; }
+.thumb .vn { position:absolute; bottom:0; left:0; right:0; font:9px ui-monospace,monospace;
+             color:#c3c6cf; background:#07080abb; padding:1px 0; text-align:center; }
+
+/* ---------- prompt sheet ---------- */
+.sheet { position:fixed; left:0; right:var(--rail); bottom:0; z-index:25; height:44vh;
+         background:#0b0d11f2; border-top:1px solid #22242b; overflow:hidden;
+         transform:translateY(100%); transition:transform .22s cubic-bezier(.3,.8,.3,1); }
+.sheet.open { transform:translateY(0); }
+.sheetinner { padding:14px 18px 22px; }
+.sheet h2 { margin:0 0 8px; font:13px ui-monospace,monospace; color:#7aa2ff; font-weight:500;
+            display:flex; gap:12px; align-items:baseline; }
+.sheet h2 span { color:#8b8f9a; font-family:inherit; font-size:12px; }
+.sheet pre { margin:0; white-space:pre-wrap; font:12.5px/1.65 ui-monospace,monospace;
+             color:#9aa0ac; }
+</style></head><body>
+
+<div class="stage"><div class="stack"><img alt="" data-v="0"><img alt="" data-v="1"><img alt="" data-v="2"><img alt="" data-v="3"></div></div>
+
+<div class="bar">
+  <span class="vid"></span><span class="nm"></span>
+  <span class="sp"></span>
+  <span class="zm"></span>
+  <button class="pr">prompt</button>
+  <button class="reset" title="reset zoom (esc / 0 / [ ])">[ ]</button>
+</div>
+
+<div class="sheet"><div class="sheetinner"><h2></h2><pre></pre></div></div>
+
+<div class="rail"><div class="railinner">
+  <div class="railhint">64/64 rendered &middot; seed 424242424242 &middot; Default 20 &middot; AVIF crf30<br>
+    hover to compare &middot; click to keep &middot; wheel = zoom, drag = pan<br>
+    <kbd>1</kbd>&ndash;<kbd>4</kbd> variant &middot; <kbd>&uarr;</kbd><kbd>&darr;</kbd> prompt &middot;
+    <kbd>p</kbd> text &middot; <kbd>esc</kbd> unzoom</div>
+  <div class="railrow" data-r="0"><div class="rlabel"><span>01_objects</span><span>1</span></div><div class="thumbs"><button class="thumb" data-r="0" data-v="0"><img src="assets/01_objects__base_00001_.avif" alt=""><span class="vn">base</span></button><button class="thumb" data-r="0" data-v="1"><img src="assets/01_objects__l1000_00001_.avif" alt=""><span class="vn">1000</span></button><button class="thumb" data-r="0" data-v="2"><img src="assets/01_objects__l3010_00001_.avif" alt=""><span class="vn">3010</span></button><button class="thumb" data-r="0" data-v="3"><img src="assets/01_objects__l5000_00001_.avif" alt=""><span class="vn">5000</span></button></div></div><div class="railrow" data-r="1"><div class="rlabel"><span>02_food</span><span>2</span></div><div class="thumbs"><button class="thumb" data-r="1" data-v="0"><img src="assets/02_food__base_00001_.avif" alt=""><span class="vn">base</span></button><button class="thumb" data-r="1" data-v="1"><img src="assets/02_food__l1000_00001_.avif" alt=""><span class="vn">1000</span></button><button class="thumb" data-r="1" data-v="2"><img src="assets/02_food__l3010_00001_.avif" alt=""><span class="vn">3010</span></button><button class="thumb" data-r="1" data-v="3"><img src="assets/02_food__l5000_00001_.avif" alt=""><span class="vn">5000</span></button></div></div><div class="railrow" data-r="2"><div class="rlabel"><span>03_brand</span><span>3</span></div><div class="thumbs"><button class="thumb" data-r="2" data-v="0"><img src="assets/03_brand__base_00001_.avif" alt=""><span class="vn">base</span></button><button class="thumb" data-r="2" data-v="1"><img src="assets/03_brand__l1000_00001_.avif" alt=""><span class="vn">1000</span></button><button class="thumb" data-r="2" data-v="2"><img src="assets/03_brand__l3010_00001_.avif" alt=""><span class="vn">3010</span></button><button class="thumb" data-r="2" data-v="3"><img src="assets/03_brand__l5000_00001_.avif" alt=""><span class="vn">5000</span></button></div></div><div class="railrow" data-r="3"><div class="rlabel"><span>04_menu</span><span>4</span></div><div class="thumbs"><button class="thumb" data-r="3" data-v="0"><img src="assets/04_menu__base_00001_.avif" alt=""><span class="vn">base</span></button><button class="thumb" data-r="3" data-v="1"><img src="assets/04_menu__l1000_00001_.avif" alt=""><span class="vn">1000</span></button><button class="thumb" data-r="3" data-v="2"><img src="assets/04_menu__l3010_00001_.avif" alt=""><span class="vn">3010</span></button><button class="thumb" data-r="3" data-v="3"><img src="assets/04_menu__l5000_00001_.avif" alt=""><span class="vn">5000</span></button></div></div><div class="railrow" data-r="4"><div class="rlabel"><span>05_animals</span><span>5</span></div><div class="thumbs"><button class="thumb" data-r="4" data-v="0"><img src="assets/05_animals__base_00001_.avif" alt=""><span class="vn">base</span></button><button class="thumb" data-r="4" data-v="1"><img src="assets/05_animals__l1000_00001_.avif" alt=""><span class="vn">1000</span></button><button class="thumb" data-r="4" data-v="2"><img src="assets/05_animals__l3010_00001_.avif" alt=""><span class="vn">3010</span></button><button class="thumb" data-r="4" data-v="3"><img src="assets/05_animals__l5000_00001_.avif" alt=""><span class="vn">5000</span></button></div></div><div class="railrow" data-r="5"><div class="rlabel"><span>06_lostfound</span><span>6</span></div><div class="thumbs"><button class="thumb" data-r="5" data-v="0"><img src="assets/06_lostfound__base_00001_.avif" alt=""><span class="vn">base</span></button><button class="thumb" data-r="5" data-v="1"><img src="assets/06_lostfound__l1000_00001_.avif" alt=""><span class="vn">1000</span></button><button class="thumb" data-r="5" data-v="2"><img src="assets/06_lostfound__l3010_00001_.avif" alt=""><span class="vn">3010</span></button><button class="thumb" data-r="5" data-v="3"><img src="assets/06_lostfound__l5000_00001_.avif" alt=""><span class="vn">5000</span></button></div></div><div class="railrow" data-r="6"><div class="rlabel"><span>07_poster</span><span>7</span></div><div class="thumbs"><button class="thumb" data-r="6" data-v="0"><img src="assets/07_poster__base_00001_.avif" alt=""><span class="vn">base</span></button><button class="thumb" data-r="6" data-v="1"><img src="assets/07_poster__l1000_00001_.avif" alt=""><span class="vn">1000</span></button><button class="thumb" data-r="6" data-v="2"><img src="assets/07_poster__l3010_00001_.avif" alt=""><span class="vn">3010</span></button><button class="thumb" data-r="6" data-v="3"><img src="assets/07_poster__l5000_00001_.avif" alt=""><span class="vn">5000</span></button></div></div><div class="railrow" data-r="7"><div class="rlabel"><span>08_palette</span><span>8</span></div><div class="thumbs"><button class="thumb" data-r="7" data-v="0"><img src="assets/08_palette__base_00001_.avif" alt=""><span class="vn">base</span></button><button class="thumb" data-r="7" data-v="1"><img src="assets/08_palette__l1000_00001_.avif" alt=""><span class="vn">1000</span></button><button class="thumb" data-r="7" data-v="2"><img src="assets/08_palette__l3010_00001_.avif" alt=""><span class="vn">3010</span></button><button class="thumb" data-r="7" data-v="3"><img src="assets/08_palette__l5000_00001_.avif" alt=""><span class="vn">5000</span></button></div></div><div class="railrow" data-r="8"><div class="rlabel"><span>09_layout</span><span>9</span></div><div class="thumbs"><button class="thumb" data-r="8" data-v="0"><img src="assets/09_layout__base_00001_.avif" alt=""><span class="vn">base</span></button><button class="thumb" data-r="8" data-v="1"><img src="assets/09_layout__l1000_00001_.avif" alt=""><span class="vn">1000</span></button><button class="thumb" data-r="8" data-v="2"><img src="assets/09_layout__l3010_00001_.avif" alt=""><span class="vn">3010</span></button><button class="thumb" data-r="8" data-v="3"><img src="assets/09_layout__l5000_00001_.avif" alt=""><span class="vn">5000</span></button></div></div><div class="railrow" data-r="9"><div class="rlabel"><span>10_drawer</span><span>10</span></div><div class="thumbs"><button class="thumb" data-r="9" data-v="0"><img src="assets/10_drawer__base_00001_.avif" alt=""><span class="vn">base</span></button><button class="thumb" data-r="9" data-v="1"><img src="assets/10_drawer__l1000_00001_.avif" alt=""><span class="vn">1000</span></button><button class="thumb" data-r="9" data-v="2"><img src="assets/10_drawer__l3010_00001_.avif" alt=""><span class="vn">3010</span></button><button class="thumb" data-r="9" data-v="3"><img src="assets/10_drawer__l5000_00001_.avif" alt=""><span class="vn">5000</span></button></div></div><div class="railrow" data-r="10"><div class="rlabel"><span>11_crowd</span><span>11</span></div><div class="thumbs"><button class="thumb" data-r="10" data-v="0"><img src="assets/11_crowd__base_00001_.avif" alt=""><span class="vn">base</span></button><button class="thumb" data-r="10" data-v="1"><img src="assets/11_crowd__l1000_00001_.avif" alt=""><span class="vn">1000</span></button><button class="thumb" data-r="10" data-v="2"><img src="assets/11_crowd__l3010_00001_.avif" alt=""><span class="vn">3010</span></button><button class="thumb" data-r="10" data-v="3"><img src="assets/11_crowd__l5000_00001_.avif" alt=""><span class="vn">5000</span></button></div></div><div class="railrow" data-r="11"><div class="rlabel"><span>12_portrait</span><span>12</span></div><div class="thumbs"><button class="thumb" data-r="11" data-v="0"><img src="assets/12_portrait__base_00001_.avif" alt=""><span class="vn">base</span></button><button class="thumb" data-r="11" data-v="1"><img src="assets/12_portrait__l1000_00001_.avif" alt=""><span class="vn">1000</span></button><button class="thumb" data-r="11" data-v="2"><img src="assets/12_portrait__l3010_00001_.avif" alt=""><span class="vn">3010</span></button><button class="thumb" data-r="11" data-v="3"><img src="assets/12_portrait__l5000_00001_.avif" alt=""><span class="vn">5000</span></button></div></div><div class="railrow" data-r="12"><div class="rlabel"><span>13_banner</span><span>13</span></div><div class="thumbs"><button class="thumb" data-r="12" data-v="0"><img src="assets/13_banner__base_00001_.avif" alt=""><span class="vn">base</span></button><button class="thumb" data-r="12" data-v="1"><img src="assets/13_banner__l1000_00001_.avif" alt=""><span class="vn">1000</span></button><button class="thumb" data-r="12" data-v="2"><img src="assets/13_banner__l3010_00001_.avif" alt=""><span class="vn">3010</span></button><button class="thumb" data-r="12" data-v="3"><img src="assets/13_banner__l5000_00001_.avif" alt=""><span class="vn">5000</span></button></div></div><div class="railrow" data-r="13"><div class="rlabel"><span>14_multiling</span><span>14</span></div><div class="thumbs"><button class="thumb" data-r="13" data-v="0"><img src="assets/14_multiling__base_00001_.avif" alt=""><span class="vn">base</span></button><button class="thumb" data-r="13" data-v="1"><img src="assets/14_multiling__l1000_00001_.avif" alt=""><span class="vn">1000</span></button><button class="thumb" data-r="13" data-v="2"><img src="assets/14_multiling__l3010_00001_.avif" alt=""><span class="vn">3010</span></button><button class="thumb" data-r="13" data-v="3"><img src="assets/14_multiling__l5000_00001_.avif" alt=""><span class="vn">5000</span></button></div></div><div class="railrow" data-r="14"><div class="rlabel"><span>15_infographic</span><span>15</span></div><div class="thumbs"><button class="thumb" data-r="14" data-v="0"><img src="assets/15_infographic__base_00001_.avif" alt=""><span class="vn">base</span></button><button class="thumb" data-r="14" data-v="1"><img src="assets/15_infographic__l1000_00001_.avif" alt=""><span class="vn">1000</span></button><button class="thumb" data-r="14" data-v="2"><img src="assets/15_infographic__l3010_00001_.avif" alt=""><span class="vn">3010</span></button><button class="thumb" data-r="14" data-v="3"><img src="assets/15_infographic__l5000_00001_.avif" alt=""><span class="vn">5000</span></button></div></div><div class="railrow" data-r="15"><div class="rlabel"><span>16_comic</span><span>16</span></div><div class="thumbs"><button class="thumb" data-r="15" data-v="0"><img src="assets/16_comic__base_00001_.avif" alt=""><span class="vn">base</span></button><button class="thumb" data-r="15" data-v="1"><img src="assets/16_comic__l1000_00001_.avif" alt=""><span class="vn">1000</span></button><button class="thumb" data-r="15" data-v="2"><img src="assets/16_comic__l3010_00001_.avif" alt=""><span class="vn">3010</span></button><button class="thumb" data-r="15" data-v="3"><img src="assets/16_comic__l5000_00001_.avif" alt=""><span class="vn">5000</span></button></div></div>
+</div></div>
+
+<script src="assets/lenis.min.js"></script>
+<script>
+const ROWS = [{"name": "01_objects", "label": "Calibration still life - many objects, charts, legible labels", "prompt": "A straight-on, deep-focus studio photograph of a white plywood shelving unit built as a photographic calibration target, filling the entire frame with no visible floor or ceiling. The unit is divided into three horizontal tiers by white shelf boards, and every object is lit by an even, neutral daylight-balanced softbox from the front left, producing soft shadows and no blown highlights.\n\nOn the top tier, arranged left to right: a green printed circuit board standing upright against the back panel, four cast-iron gears of decreasing size leaning against each other, a rusted five-pointed metal star, a tangled loop of galvanised chain, a black wire-mesh cup holding exactly eight felt-tip markers with red, yellow, green and blue caps, and a cobalt blue glass vase holding exactly three dahlias: one pale yellow, one deep magenta, one coral pink. Four wooden alphabet blocks stand along the front edge of this tier, spelling the letters T, E, S, T from left to right in coloured serif type. A single white chicken egg rests in the centre.\n\nThe middle tier is dominated by two flat calibration charts propped side by side. The left chart is a matte grid of exactly twenty-four colour patches in four rows of six, framed in black, with small printed text along its bottom edge reading \"COLOUR RENDITION CHART\". The right chart is a dense printed target of small colour and greyscale squares with a legible row of numbers 1 to 22 across the top and letters A to L down both sides. Immediately below both charts lies a long horizontal grey-scale strip with legible printed text reading \"GRAY SCALE\" and a row of step numbers from 1 to 19.\n\nOn the bottom tier, left to right: a brushed steel cocktail shaker held by a hand entering from the left frame edge, a chrome stand holding exactly four white golf balls stacked in a pyramid, two dried ears of multicoloured corn, a brown leather cylindrical case, a pair of black binoculars, a purple fabric box embroidered with a thin branch pattern, and a single yellow sunflower on a tall green stem leaning right. In the lower centre stands a round glass fish bowl half filled with water, purple gravel and one blue betta fish, next to a yellow twin-bell alarm clock whose white face shows legible hands at ten past ten. A terracotta pot of small green cacti and a blue glass bottle occupy the lower right, beside one orange, one lemon and one peach resting directly on the shelf board. Colours are saturated but accurate, textures are crisp from front to back, and the whole composition reads as an orderly test chart rather than a casual still life.", "w": 1024, "h": 1360, "imgs": {"base": "assets/01_objects__base_00001_.avif", "l1000": "assets/01_objects__l1000_00001_.avif", "l3010": "assets/01_objects__l3010_00001_.avif", "l5000": "assets/01_objects__l5000_00001_.avif"}}, {"name": "02_food", "label": "Food still life - warm raking light, exact counts, small legible label", "prompt": "A three-quarter overhead photograph of a round pale birch cheese board resting on a honey-toned oak table, shot on an 85mm lens at a shallow aperture so the far edge of the table falls gently out of focus. Hard late-afternoon sunlight rakes in from the upper right through an unseen window, throwing long soft-edged shadows to the lower left and casting two bright diagonal bands of light across the tabletop.\n\nOn the board, arranged clockwise from the upper left: a loose bunch of red-purple grapes still on a woody stem, a thick triangular wedge of firm pale yellow cheese with a natural rind and a few small irregular holes, a stacked pair of soft white-rinded brie wedges with a visibly creamy interior, and a crumbling wedge of blue-veined cheese with dense blue-grey marbling. A single sprig of fresh rosemary lies diagonally across the lower left of the board. Exactly three shelled walnut halves sit scattered on the wood between the rosemary and a small hammered brass dish holding a mound of mixed almonds, cashews and walnut pieces, its long ornate handle extending to the lower right.\n\nOff the board to the left, a rustic sourdough boule with a dark blistered crust sits with exactly three slices cut and fanned in front of it, each slice showing an open irregular crumb. Behind the board stand two small white fluted ramekins: the left one filled with dark red fruit preserve catching a specular highlight, the right one filled with whole green cornichons. Four loose grapes have rolled onto the bare table in the upper left, each casting its own small shadow. On the right stands a clear glass jar of amber honey with a wooden honey dipper resting inside and leaning right; a small cream paper label on the jar carries two legible lines of printed text reading \"MIEL DE FORET\" above smaller type reading \"RECOLTE 2024\". A crumpled oatmeal linen napkin enters the frame from the lower left corner. In the deep background upper right, the pale blurred corner of a wooden chair back is just visible against a soft white wall.", "w": 1456, "h": 976, "imgs": {"base": "assets/02_food__base_00001_.avif", "l1000": "assets/02_food__l1000_00001_.avif", "l3010": "assets/02_food__l3010_00001_.avif", "l5000": "assets/02_food__l5000_00001_.avif"}}, {"name": "03_brand", "label": "Brand identity sheet - dense small legible type, strict grid", "prompt": "A flat, straight-on presentation board for a fictional cloud software company, photographed as a clean digital mockup sheet on a pure white background with no perspective distortion and no drop shadow around the sheet itself. The sheet is divided by thin light grey hairlines into six rectangular panels arranged in a two-row grid, each panel labelled in the upper left with tiny grey uppercase text.\n\nThe upper left panel is labelled \"PRIMARY LOGO\" and contains a wordmark reading \"NIMBRA\" in a modern geometric sans-serif, preceded by a mark of two overlapping rounded clouds, the rear cloud pale periwinkle and the front cloud saturated indigo blue. Directly below it, a panel labelled \"ALTERNATE LOGO\" repeats the same lockup at a smaller size. Below that, a small square panel labelled \"APP ICON\" shows the cloud mark alone, white on a rounded-corner navy tile.\n\nThe second column contains two stacked panels. The upper one, labelled \"REVERSED LOGO\", shows the white \"NIMBRA\" lockup on a solid navy card. The lower one, labelled \"BUSINESS CARD\", shows a white card bearing the small cloud mark, the name \"ALEX MORGAN\" in bold dark type, the line \"HEAD OF PLATFORM\" beneath it, and three tiny lines of grey contact text below that.\n\nThe large panel occupying the entire right half of the top row is labelled \"HOMEPAGE MOCKUP\" and shows a browser window with a thin navigation bar carrying five small menu words and a blue pill-shaped button reading \"GET STARTED\". Its headline reads \"WORK BETTER.\" on the first line and \"FROM ANYWHERE.\" on the second, the final two words rendered in indigo while the rest is near-black. Two short lines of small grey body text sit beneath, followed by a solid indigo button reading \"TRY FREE\" and an outlined button reading \"BOOK A DEMO\". To the right of the text floats a pale dashboard card showing a small rising line chart and a large legible figure reading \"98.6%\".\n\nIn the bottom row, a panel labelled \"COLOUR PALETTE\" shows exactly five swatch rectangles in a row, from left to right: near-black navy, saturated indigo, soft periwinkle, pale lavender, and off-white, each with two tiny lines of grey text beneath giving a name and a hex code. The adjacent panel labelled \"TYPOGRAPHY\" shows a very large letterform pair \"Aa\" above the typeface name \"INTER\" and four progressively smaller lines of specimen text. A narrow panel labelled \"ICONOGRAPHY\" holds a grid of ten thin-line outline icons in two rows of five: cloud, shield, user, clock, message, folder, document, sliders, bell, and grid. The final panel, labelled \"PACKAGING\", shows a matte navy cube-shaped box in soft three-quarter perspective with the white cloud mark and \"NIMBRA\" wordmark on its front face and two small lines of white text near its lower edge. A single line of small dark centred text sits directly beneath the entire sheet reading \"BRAND GUIDELINES 2024\". All type is crisp and legible, the layout is airy and precisely aligned, and the only colours present are navy, indigo, periwinkle, lavender, white and neutral grey.", "w": 1456, "h": 1088, "imgs": {"base": "assets/03_brand__base_00001_.avif", "l1000": "assets/03_brand__l1000_00001_.avif", "l3010": "assets/03_brand__l3010_00001_.avif", "l5000": "assets/03_brand__l5000_00001_.avif"}}, {"name": "04_menu", "label": "Chalkboard menu - many legible handwritten lines, shallow DOF", "prompt": "A horizontal photograph taken from a customer's eye level inside a small sandwich shop, shot on a 35mm lens at a wide aperture so the chalkboard behind the counter is sharp while the foreground counter edge and the background fall softly out of focus. Warm tungsten light spills from a brass dome pendant lamp hanging just inside the upper left corner of the frame, while cool daylight leaks in from an unseen doorway on the far left.\n\nThe centre of the frame is filled by a large blackboard in a chunky reclaimed timber frame, its surface faintly streaked with old chalk swirls. Across the top, large white hand-lettered capitals read \"TODAY'S SANDWICHES\", underlined with a double wavy chalk line. Below the heading the board is divided into two columns of menu entries, each entry beginning with a small coloured chalk dot.\n\nThe left column lists four items. First, in salmon-red capitals, \"THE ITALIAN - 9.50\" followed by two smaller white cursive lines reading \"prosciutto, salami, provolone,\" and \"arugula, hot peppers on ciabatta\". Second, in pale yellow capitals, \"TURKEY CLUB - 8.75\" with two white lines reading \"roast turkey, bacon, avocado,\" and \"tomato, dijon-mayo on sourdough\". Third, in mint green capitals, \"THE CUBANO - 10.00\" followed by the underlined yellow words \"CHEF'S PICK\" and a small five-pointed chalk star, then two white lines reading \"slow-roast pork, ham, swiss,\" and \"pickles, mustard on a cuban roll\". Fourth, in pink capitals, \"MEATBALL SUB - 9.00\" with two white lines reading \"house meatballs, marinara,\" and \"mozzarella, basil on a hero roll\".\n\nThe right column lists three items. First, in mint green capitals, \"VEGGIE GARDEN - 8.25\" with two white lines reading \"roasted peppers, eggplant,\" and \"zucchini, pesto on focaccia\". Second, in pale orange capitals, \"SMOKED BRISKET - 11.50\" with a small yellow star above the word BRISKET, then two white lines reading \"12-hr brisket, slaw, pickles,\" and \"bbq aioli on brioche\". Third, in pale blue capitals, \"TUNA MELT - 8.50\" with two white lines reading \"albacore, sharp cheddar,\" and \"red onion, dill on rye\".\n\nBeneath both columns a single pale blue line reads \"ADD: avocado +1.50 - bacon +2 - egg +1.50\", and below it, in bouncy salmon-red script, \"Ask About Today's Soup!\" followed by a small chalk drawing of a steaming bowl. A narrow reclaimed-wood shelf runs along the base of the board holding a terracotta pot of fresh basil on the left and exactly nine glass mason jars in a row, filled variously with sliced cucumbers, red peppers, yellow peppers and green pickles, their brass lids catching the pendant light. On the right third of the frame, softly out of focus, a shop worker with dark hair in a low braid stands behind the counter in a white t-shirt and a charcoal canvas apron, looking down at her hands as she wraps a sandwich in white paper; a small dark name tag on her apron chest carries legible white lettering reading \"MARCO\". Behind her right shoulder rises an exposed red brick pillar, and a stack of white paper cups sits blurred in the extreme right foreground. A stainless steel display case edge cuts across the very bottom of the frame.", "w": 1600, "h": 896, "imgs": {"base": "assets/04_menu__base_00001_.avif", "l1000": "assets/04_menu__l1000_00001_.avif", "l3010": "assets/04_menu__l3010_00001_.avif", "l5000": "assets/04_menu__l5000_00001_.avif"}}, {"name": "05_animals", "label": "Scale ordering - five animals, strict descending size, counting", "prompt": "A wide documentary photograph taken at animal eye level on a bare dirt clearing, shot on a 50mm lens with a deep depth of field so both the animals and the distant treeline stay legible. The light is flat and diffuse under a heavily overcast sky, producing soft shadows directly beneath each animal and no strong highlights.\n\nExactly five animals stand in a single row across the middle of the frame, ordered strictly from largest on the left to smallest on the right, their heights forming a clean descending staircase. On the far left stands a full-grown African elephant in three-quarter view facing slightly left, its enormous grey ears fanned outward, two pale curved tusks visible, deep wrinkles across its trunk and forehead, and its trunk hanging down and curling gently inward at the tip. Immediately to its right stands a bay horse in profile facing right, its coat a warm reddish brown with a black mane and tail, a white blaze running down the centre of its face, and black lower legs; its head is turned slightly toward the camera and its withers reach roughly to the elephant's shoulder.\n\nThird in the row, a golden retriever stands square and alert facing the camera, its long cream-gold coat slightly wavy at the chest and tail, mouth open in a relaxed pant with the pink tongue visible, ears hanging soft against its cheeks, and its head reaching roughly to the horse's knee. Fourth, a grey tabby cat walks slowly to the right in profile, its striped coat marked with darker rings along the tail, tail carried low and curved upward at the tip, one front paw lifted mid-step, its shoulder height reaching roughly to the dog's elbow. On the far right, a single small brown field mouse sits on the bare earth in profile facing right, its long thin tail trailing behind it, tiny pink ears and paws visible, no larger than the cat's paw.\n\nNo other animals appear anywhere in the frame. The foreground is dry compacted earth scattered with small pale stones and sparse tufts of yellow-green grass. The middle distance behind the animals is a low band of dense green scrub and bushes, and beyond that a range of rounded forested hills recedes into pale grey haze. The upper third of the frame is filled with soft layered white and grey cloud. Scale relationships between all five animals remain anatomically plausible and consistent.", "w": 1200, "h": 1200, "imgs": {"base": "assets/05_animals__base_00001_.avif", "l1000": "assets/05_animals__l1000_00001_.avif", "l3010": "assets/05_animals__l3010_00001_.avif", "l5000": "assets/05_animals__l5000_00001_.avif"}}, {"name": "06_lostfound", "label": "Lost & found office - reference prompt, verbatim", "prompt": "An eye-level 50mm film still shows a 24-hour railway lost-and-found office at night, viewed from the exterior corridor through a large glass wall and an open doorway. The lighting is a study in contrast: a dim corridor with cool-toned blue fluorescent light transitions into the office interior, which is illuminated by a neutral overhead fluorescent source and a small, warm-toned lamp glowing near the back wall.\n\nIn the close up foreground left, a female clerk in her mid-30s stands behind a wooden counter. She wears a dark green wool cardigan over a crisp white shirt, rectangular frames on her face, and a silver name tag that clearly displays the text \"MARTA\". She holds a clipboard in her left hand featuring a document with the legible heading \"PLATFORM 3\", while her right hand grips a blue plastic pen. A thin silver ring is visible on her left index finger. She maintains an alert, neutral expression, directing her gaze slightly to the right of the frame.\n\nTo her right, a short passenger wearing a textured orange raincoat and a matte black cap places a transparent plastic crate onto the counter. Inside this crate are exactly five umbrellas: one yellow umbrella is open and positioned in the center, flanked by two closed black umbrellas and two closed red umbrellas. No other umbrellas are present in the scene.\n\nIn front of the counter on the floor, three bags are arranged in a specific sequence from left to right. Closest to the camera is a red hard-shell suitcase with a white sticker reading \"A17\" and visible black wheels. Next is a black duffel bag with a yellow tag reading \"B04\", its zipper slightly parted to reveal the fabric of a folded green sweater inside. Partially obscured behind the duffel bag is a blue backpack with a white tag reading \"C22\". A trail of wet footprints leads from the open doorway and terminates exactly at the red suitcase; the floor behind the counter remains completely dry and reflective.\n\nIn the midground left, a tall porter in a navy blue uniform and a red scarf carries a cardboard box with the bold black text \"GLASS\". In the midground right, a shorter porter in a charcoal grey uniform and a blue scarf holds a brass desk lamp. The lighting catches the metallic surface of the lamp and the matte texture of the uniforms.\n\nThe back wall features a departures board with three distinct lines of readable text: \"VILNIUS\", \"KAUNAS\", and \"KLAIPEDA\". Below this board hangs a small poster with the printed words \"LOST & FOUND\". In the upper right corner of the frame, a convex security mirror is mounted to the wall, its distorted reflection showing a janitor in the exterior corridor pushing a mop bucket. This janitor is visible only within the mirror's reflection and is not physically present in the office.\n\nOn the right side of the room, a glass display cabinet with four shelves stands against the wall. On the second shelf from the top, three watches are arranged from left to right: one silver, one gold, and one black. On the bottom shelf, a small orange cat sits looking toward the counter, its form reflected clearly in the cabinet's glass doors. The countertop itself holds exactly four items: a brass bell near the clerk, a stamp pad, a paper cup, and a metal ring holding exactly three keys near the passenger. Realistic light reflections and refractions appear across the glass wall, the display cabinet, and the damp floor tiles, maintaining a consistent spatial logic across the entire deep-focus composition.", "w": 1600, "h": 896, "imgs": {"base": "assets/06_lostfound__base_00001_.avif", "l1000": "assets/06_lostfound__l1000_00001_.avif", "l3010": "assets/06_lostfound__l3010_00001_.avif", "l5000": "assets/06_lostfound__l5000_00001_.avif"}}, {"name": "07_poster", "label": "Typographic poster - six text elements, own scale/position/rotation", "prompt": "A flat graphic design poster, printed on uncoated paper and photographed straight on so the whole sheet fills the frame with no perspective and no shadow. The design is built from six pieces of text, each at its own size, position and angle, over a background of overlapping soft-edged geometric shapes in mustard yellow, deep teal and warm off-white.\n\nThe title occupies the upper half and is by far the largest element: the two words \"NIGHT MARKET\" set in a heavy condensed sans-serif, stacked on two lines, flush left against the left margin, in deep teal, with the second word slightly overlapping a large mustard circle behind it. Immediately beneath the title, at roughly one fifth of its size, a subtitle reads \"AN EVENING OF FOOD, NOISE AND NEON\" in widely letterspaced small capitals, in warm off-white on a teal band.\n\nRotated about fifteen degrees counter-clockwise and placed across the middle right of the sheet, a date line reads \"FRIDAY 12 SEPTEMBER\" in a bold italic serif, in near-black. Below and to the left of it, running vertically up the left edge with the letters rotated ninety degrees, a tagline reads \"EAT LATE, WALK SLOW\" in a thin monospaced face, in mustard yellow.\n\nIn the lower third, a short credit block sits flush right in three tight lines of very small grey type reading \"PRESENTED BY THE HARBOUR SOCIETY\", \"SOUND BY KESTREL COLLECTIVE\" and \"DESIGN BY ATELIER NINE\". Finally, in the bottom left corner, an RSVP element is set inside a thin rounded rectangle outlined in near-black, containing the single word \"RSVP\" in small bold capitals above a smaller line reading \"HARBOURSOCIETY.ORG\".\n\nEvery one of the six text elements is crisp, correctly spelled and clearly legible at its own scale, none overlaps another to the point of illegibility, and the composition stays balanced with generous empty paper between the blocks.", "w": 1024, "h": 1360, "imgs": {"base": "assets/07_poster__base_00001_.avif", "l1000": "assets/07_poster__l1000_00001_.avif", "l3010": "assets/07_poster__l3010_00001_.avif", "l5000": "assets/07_poster__l5000_00001_.avif"}}, {"name": "08_palette", "label": "Palette lock - entire scene restricted to three named colours", "prompt": "A contemporary flat illustration of a small laundrette at night, drawn in a clean vector style with crisp edges, no gradients and no texture, composed as a square.\n\nThe entire image is restricted to exactly three colours and nothing else: a deep slate navy, a dusty coral pink, and a pale warm sand. Every surface, every shape, every line and every piece of text uses one of these three colours only. There is no white, no black, no grey, no green and no blue outside the slate navy itself. Where depth or shading is needed it is achieved by flat blocks of these three colours against each other rather than by tinting, blending or adding new hues.\n\nThe composition is straight on, like a stage set. The back wall is deep slate navy and carries a row of exactly six front-loading washing machines in pale warm sand, their circular doors rendered as dusty coral discs, arranged in one even row across the middle of the frame. Above them, a horizontal sign in pale warm sand carries the legible words \"WASH & FOLD\" in slate navy capitals. To the left, a tall folding table in dusty coral holds three neatly stacked piles of laundry in pale sand. To the right, a single vending machine in pale sand has a coral panel and a small slate navy coin slot.\n\nIn the foreground, a lone figure in a dusty coral coat sits on a pale sand bench in three-quarter view, facing right, reading a folded newspaper rendered in pale sand with slate navy line marks standing in for text. A slate navy tiled floor with a simple pale sand grid recedes toward the machines. Through a window in the upper left corner, a coral crescent moon sits in a slate navy sky. The overall feel is calm, graphic and poster-like, and the three-colour restriction holds absolutely everywhere in the frame.", "w": 1200, "h": 1200, "imgs": {"base": "assets/08_palette__base_00001_.avif", "l1000": "assets/08_palette__l1000_00001_.avif", "l3010": "assets/08_palette__l3010_00001_.avif", "l5000": "assets/08_palette__l5000_00001_.avif"}}, {"name": "09_layout", "label": "Four-element layout - strict relational placement", "prompt": "A contemporary illustration of a sunlit apartment corner in the late morning, drawn with soft flat shapes, gentle grain and a warm muted palette, composed in landscape.\n\nExactly four elements carry the composition and each occupies its own clearly separated region of the frame, with no two overlapping.\n\nA tall window fills the right third of the image from top edge to floor, its frame painted chalky white, divided into six panes by thin muntins, with pale sunlight pouring through it and casting a hard-edged parallelogram of light across the floor toward the lower left corner.\n\nA woman stands in the left third, in three-quarter view facing right toward the window, her weight on her back foot. She wears a loose oatmeal linen shirt with the sleeves pushed to the elbow and wide dark olive trousers, her dark hair tied in a low bun, one hand wrapped around a small ceramic cup held at chest height. Her head and shoulders reach into the upper half of the frame; her feet are visible on the floor.\n\nA large monstera plant occupies the centre of the frame between the woman and the window, standing in a ribbed terracotta pot on the floor. It has exactly seven broad split leaves, three of them turned toward the window and catching the light on their upper surfaces, the rest in soft shade.\n\nA cat lies in the lower right, directly inside the bright parallelogram of sunlight on the floorboards, stretched out on its side with its front legs extended and its eyes closed. It is a short-haired ginger tabby with faint darker stripes along its flank and a white chin.\n\nNothing else of substance appears: the back wall is a plain warm off-white, the floor is pale honey-toned boards running diagonally toward the window, and the negative space between the four elements stays deliberately empty so each one reads separately and in its stated place.", "w": 1360, "h": 1024, "imgs": {"base": "assets/09_layout__base_00001_.avif", "l1000": "assets/09_layout__l1000_00001_.avif", "l3010": "assets/09_layout__l3010_00001_.avif", "l5000": "assets/09_layout__l5000_00001_.avif"}}, {"name": "10_drawer", "label": "Dense object catalogue - ~20 distinct labelled items in a grid", "prompt": "A hand-drawn editorial illustration presented as a flat overhead catalogue of the contents of a household junk drawer, arranged on a pale cream background in an even grid of five columns and four rows. Every object is drawn in a loose ink line with flat watercolour fill, sits fully separated from its neighbours with clear cream space around it, and has a small handwritten label in grey beneath it.\n\nReading left to right along the top row: a brass door key labelled \"SPARE KEY\", a roll of beige masking tape labelled \"TAPE\", a red-handled screwdriver labelled \"PHILLIPS\", a tangle of black earphones labelled \"EARPHONES\", and a single AA battery labelled \"BATTERY\".\n\nSecond row: a pair of small steel scissors with orange handles labelled \"SCISSORS\", a folded paper tape measure labelled \"TAPE MEASURE\", three brass thumbtacks grouped together labelled \"TACKS\", a blue plastic lighter labelled \"LIGHTER\", and a rubber band ball labelled \"ELASTICS\".\n\nThird row: a coil of green garden twine labelled \"TWINE\", a chrome bottle opener labelled \"OPENER\", two paper clips labelled \"CLIPS\", a small tube of superglue labelled \"GLUE\", and a yellow carpenter's pencil labelled \"PENCIL\".\n\nBottom row: a folded set of allen keys labelled \"ALLEN KEYS\", a white plastic wall plug labelled \"WALL PLUG\", a single silver coin labelled \"COIN\", a strip of four plasters labelled \"PLASTERS\", and a tiny brass padlock with no key labelled \"PADLOCK\".\n\nAcross the very top of the sheet, above the grid, a hand-lettered title reads \"CONTENTS OF ONE DRAWER\" in dark grey capitals, and directly beneath it a smaller line in italic grey reads \"catalogued on a wet Sunday\". All twenty objects are drawn at a consistent scale relative to each other, all labels are correctly spelled and legible, and the grid stays regular with even gutters.", "w": 1360, "h": 1024, "imgs": {"base": "assets/10_drawer__base_00001_.avif", "l1000": "assets/10_drawer__l1000_00001_.avif", "l3010": "assets/10_drawer__l3010_00001_.avif", "l5000": "assets/10_drawer__l5000_00001_.avif"}}, {"name": "11_crowd", "label": "Ink & watercolour, 40+ silhouetted figures, deep scale", "prompt": "A wide fantasy landscape painted in ink and watercolour on cold-pressed paper, with visible paper tooth, bleeding pigment edges, granulating washes and confident dark ink linework over soft colour. The palette is indigo, sepia, pale ochre and thin sea green, kept translucent so the paper glows through.\n\nThe subject is a city built across the tops of five enormous rock spires that rise out of a sea of low cloud. Each spire is crowned with tiled roofs, narrow towers, laundry lines and small round windows, painted in warm sepia and ochre with ink outlines. The spires are connected to one another by four long winding suspension bridges that sag in gentle catenary curves, their cables drawn as fine ink strokes, each bridge crossing at a different height so they layer over one another in depth.\n\nMore than forty human figures populate the scene, and every one of them is rendered only as a small dark ink silhouette with no facial features or detail. They are distributed deliberately: a dense group of roughly fifteen crowds the widest bridge in the centre middle-ground, moving in both directions; about ten more are scattered singly along the two higher bridges to the left; six lean over railings on the rooftop terraces of the largest spire on the right; a cluster of five sits along a low wall in the near foreground, seen from behind, looking out across the cloud sea; and the remaining figures appear as tiny specks on the furthest spire, small enough to read as marks rather than bodies. The silhouettes get progressively smaller and paler with distance.\n\nThree thin-necked birds glide in the empty air between the spires. The cloud sea below is painted as broad wet-in-wet indigo washes with soft blooms and hard-edged tide marks where the pigment dried. The sky above is a graded pale ochre wash, nearly white at the horizon, with the faint circle of a low sun burning through near the right edge. Nothing in the image looks digital: brush edges, backruns and dry-brush scumbling stay visible throughout.", "w": 1600, "h": 896, "imgs": {"base": "assets/11_crowd__base_00001_.avif", "l1000": "assets/11_crowd__l1000_00001_.avif", "l3010": "assets/11_crowd__l3010_00001_.avif", "l5000": "assets/11_crowd__l5000_00001_.avif"}}, {"name": "12_portrait", "label": "Photorealistic close-up - skin detail, film grain, shallow DOF", "prompt": "A tightly framed photorealistic photograph of an elderly man holding a sleeping infant against his shoulder, shot on a 85mm lens at a very wide aperture so the plane of focus falls exactly on the man's eyes and the background dissolves into smooth unstructured blur. Fine Kodak Portra 400 grain sits evenly across the whole frame, heavier in the shadows, with the slightly warm highlight rolloff and soft magenta-leaning shadows of colour negative film.\n\nThe man is in his late seventies, seen in three-quarter view from his left, his head tilted down and slightly toward the baby. His skin is rendered with genuine detail: visible open pores across the nose and cheeks, fine crosshatched wrinkles at the outer corner of the eye, three deeper horizontal creases on the forehead, a spray of small brown sun spots across the temple, and translucent thinning skin over the back of the hand supporting the infant, where blue-grey veins and prominent tendons show through. Two days of white stubble catches the light along the jaw. His eyebrows are unruly and partly white, and one deep vertical line runs between them. His eyes are pale grey-blue, slightly watery, with a small crisp specular highlight from a window to the left, and the lower lids show the loose folds of age.\n\nHe wears a heather grey wool cardigan with visible knit texture and one small pill of fibre near the shoulder seam. The infant, no more than a few weeks old, is asleep with one cheek pressed flat against the cardigan, lips slightly parted, a single dark curl of fine hair on the crown, and one tiny hand curled into a fist resting on the man's collarbone with the fingernails clearly visible. The baby is swaddled in a pale cream cotton blanket with a soft waffle weave.\n\nThe light is a single large window source from the front left, soft but directional, modelling the man's face with a gentle falloff into shadow on the right side of his head and leaving a soft catchlight on the baby's cheek. The background is an unidentifiable warm brown interior, completely out of focus, with two dim out-of-focus highlights rendering as soft round bokeh discs in the upper right. No part of the image looks illustrated or smoothed: the texture of skin, wool and cotton all read as photographic.", "w": 1024, "h": 1360, "imgs": {"base": "assets/12_portrait__base_00001_.avif", "l1000": "assets/12_portrait__l1000_00001_.avif", "l3010": "assets/12_portrait__l3010_00001_.avif", "l5000": "assets/12_portrait__l5000_00001_.avif"}}, {"name": "13_banner", "label": "Ultrawide social banner - extreme aspect, text placement", "prompt": "An extremely wide, short social banner image, composed specifically for a letterbox strip roughly four times wider than it is tall, with the whole design working inside that narrow horizontal band and nothing important near the very top or bottom edges.\n\nThe background is a smooth horizontal gradient running from deep aubergine on the far left through dusty plum in the centre to burnt amber on the far right, overlaid with a subtle fine-grain noise texture.\n\nThe left third holds a simple mark: a thin-line outline drawing of a paper aeroplane in pale cream, tilted upward to the right, with a dotted cream trail curving away behind it toward the left edge.\n\nThe centre third carries the main text, vertically centred and left-aligned: a headline reading \"SLOW MAIL\" in a wide cream serif with generous letterspacing, and directly beneath it, at about a third of that size, a subline in pale amber reading \"LETTERS THAT TAKE THEIR TIME\". Both lines are crisp, correctly spelled and comfortably clear of the top and bottom edges.\n\nThe right third holds three small evenly spaced circular badges in outlined cream, each containing a tiny centred icon and a very small label beneath it: a stamp icon labelled \"POST\", an envelope icon labelled \"WRITE\", and a clock icon labelled \"WAIT\". Between the centre text and the badges, a single thin vertical cream rule runs most of the height of the band as a divider.\n\nThe layout stays deliberately airy for such a short strip: everything sits on one horizontal axis, no element is cropped by the frame, and the extreme width is used rather than fought.", "w": 1584, "h": 400, "imgs": {"base": "assets/13_banner__base_00001_.avif", "l1000": "assets/13_banner__l1000_00001_.avif", "l3010": "assets/13_banner__l3010_00001_.avif", "l5000": "assets/13_banner__l5000_00001_.avif"}}, {"name": "14_multiling", "label": "Multilingual in-image text - Latin, Cyrillic, CJK together", "prompt": "A straight-on photograph of a small international bookshop's window display at dusk, shot on a 50mm lens with the glass filling most of the frame and the warm interior glowing behind it.\n\nTaped to the inside of the glass are five separate printed signs, each in a different script, all flat to the glass, all crisply legible and correctly spelled.\n\nAt the top centre, the largest sign is white card with black type reading \"WORLD LITERATURE\" in bold sans-serif capitals. Directly beneath it, a smaller cream sign carries the Russian words \"\u041a\u041d\u0418\u0413\u0418 \u0418 \u041a\u041e\u0424\u0415\" in dark red capitals. To the left of centre, a pale blue sign carries the Japanese characters \"\u672c\u5c4b\" in heavy black brushed strokes, with the smaller Latin word \"HONYA\" printed beneath them. To the right of centre, a mustard yellow sign carries the Chinese characters \"\u65b0\u66f8\u5230\" in black, with a thin black border around the card. In the lower left corner of the window, a small handwritten white sign in blue ink reads \"OUVERT\" above a second line reading \"10h - 19h\".\n\nBehind the glass, three wooden shelves are stacked with books seen mostly spine-on, their titles too small to resolve into words, in muted reds, greens and creams. A brass desk lamp with a green glass shade sits on the middle shelf, throwing warm light upward. A tortoiseshell cat sleeps curled on a stack of four large books on the bottom shelf. In the upper right of the glass, the reflection of a streetlight and the dim silhouette of a passing cyclist appear as a partial overlay on the scene, clearly reading as a reflection on the glass rather than as objects inside the shop.\n\nThe pavement in front is wet and reflects a little of the window's warm light. Each of the five signs remains individually sharp and readable, with no script bleeding into another and no invented characters.", "w": 1456, "h": 976, "imgs": {"base": "assets/14_multiling__base_00001_.avif", "l1000": "assets/14_multiling__l1000_00001_.avif", "l3010": "assets/14_multiling__l3010_00001_.avif", "l5000": "assets/14_multiling__l5000_00001_.avif"}}, {"name": "15_infographic", "label": "Infographic - chart geometry, numbers, legend, labels", "prompt": "A flat printed infographic page photographed straight on, filling the frame, laid out on a warm off-white background with a strict left-aligned grid and a restrained palette of deep ink blue, muted brick red, sage green and warm grey.\n\nAcross the top, a headline in deep ink blue reads \"HOW THE TOWN GETS TO WORK\", and beneath it a single smaller grey line reads \"SURVEY OF 1,200 RESIDENTS, SPRING 2024\".\n\nThe left half of the page below the headline holds a vertical bar chart with exactly five bars of clearly different heights, standing on a thin horizontal baseline, with a labelled vertical axis marked at four evenly spaced points reading \"0\", \"10\", \"20\" and \"30\" followed by a small \"%\" at the top. The bars, left to right, are labelled beneath the baseline in small grey capitals as \"WALK\", \"BUS\", \"CAR\", \"BICYCLE\" and \"TRAIN\". The tallest bar is the third one, in brick red, and each bar carries its own value printed directly above it, reading in order \"18\", \"22\", \"31\", \"17\" and \"12\", so the printed numbers match the relative bar heights.\n\nThe right half holds a donut chart, a clean ring with a hollow centre, divided into exactly three unequal segments coloured deep ink blue, sage green and brick red, with the largest segment occupying roughly half the ring. In the hollow centre, a large figure reads \"62%\" with a small grey line beneath it reading \"COMMUTE ALONE\". To the right of the donut sits a three-item legend, each item a small coloured square followed by a short label, reading \"ALONE\", \"SHARED\" and \"OTHER\" from top to bottom, the square colours matching the corresponding ring segments.\n\nAlong the bottom of the page runs a simple horizontal timeline with four evenly spaced dots on a thin sage line, each dot labelled beneath with a year reading \"2010\", \"2015\", \"2020\" and \"2024\", and above each dot a very small figure reading \"41\", \"48\", \"55\" and \"62\". In the bottom right corner, a small grey credit line reads \"SOURCE: TOWN TRANSPORT OFFICE\".\n\nAll numerals are crisp and correctly formed, no label is duplicated or garbled, the chart geometry is clean and mathematically plausible, and the alignment of every element to the underlying grid is exact.", "w": 1456, "h": 1088, "imgs": {"base": "assets/15_infographic__base_00001_.avif", "l1000": "assets/15_infographic__l1000_00001_.avif", "l3010": "assets/15_infographic__l3010_00001_.avif", "l5000": "assets/15_infographic__l5000_00001_.avif"}}, {"name": "16_comic", "label": "Four-panel comic - panel grid, balloons, character consistency", "prompt": "A square four-panel comic page drawn in a clean contemporary style with confident black ink linework and flat muted colour, laid out as a strict two-by-two grid of equal rectangular panels separated by even white gutters, with a thin black border around each panel.\n\nThe same character appears in all four panels and must stay recognisably identical throughout: a young woman with a short dark bob cut with a blunt fringe, round wire-rimmed glasses, a small mole on her left cheek, a mustard yellow crew-neck jumper and dark blue jeans. Her jumper, hair shape, glasses and mole are consistent in every panel.\n\nIn the top left panel, she stands in a kitchen holding an empty white mug, looking down into it with a flat expression. A speech balloon above her reads \"Out of coffee.\" The kitchen behind her has a pale green tiled backsplash and a single window.\n\nIn the top right panel, she is outside on a rainy street in the same clothes, now under a transparent umbrella, walking to the right past a shop with a green awning. A small caption box in the upper left corner of the panel reads \"TWO MINUTES LATER\". Rain is drawn as sparse diagonal ink strokes.\n\nIn the bottom left panel, she stands inside a caf\u00e9 at the counter, seen from behind the counter's perspective, facing the viewer. A barista's arm reaches in from the right edge holding out a paper cup. Her speech balloon reads \"Large, please.\" and a second smaller balloon from off-panel right, with its tail pointing off the edge, reads \"Coming up.\"\n\nIn the bottom right panel, she is back in the same kitchen from the first panel, in the same spot by the window, now holding the paper cup with both hands and smiling with her eyes closed. A speech balloon reads \"Better.\" and a small sound effect in hand-lettered capitals near the cup reads \"SIP\".\n\nAll four balloons are clean white with black outlines and tails pointing correctly at their speaker, all lettering is correctly spelled and comfortably legible, the panels stay the same size, and the gutters remain even across the page.", "w": 1200, "h": 1200, "imgs": {"base": "assets/16_comic__base_00001_.avif", "l1000": "assets/16_comic__l1000_00001_.avif", "l3010": "assets/16_comic__l3010_00001_.avif", "l5000": "assets/16_comic__l5000_00001_.avif"}}], VARIANTS = [["base", "no LoRA"], ["l1000", "step 1000"], ["l3010", "step 3010"], ["l5000", "step 5000"]];
+const stage = document.querySelector('.stage');
+const stack = document.querySelector('.stack');
+const imgs = [...stack.querySelectorAll('img')];
+const bar = document.querySelector('.bar');
+const sheet = document.querySelector('.sheet');
+
+let locked = { r: 0, v: 0 };   // the frame the rail returns to
+let loadedRow = -1;
+let shown = 0;
+
+/* ---------- preload every frame so any hover is instant ---------- */
+addEventListener('load', () => {
+  const all = ROWS.flatMap(r => Object.values(r.imgs));
+  const idle = window.requestIdleCallback || (fn => setTimeout(fn, 40));
+  let i = 0;
+  (function next() {
+    if (i >= all.length) return;
+    const im = new Image();
+    im.onload = im.onerror = () => idle(next);
+    im.src = all[i++];
+  })();
+});
+
+/* ---------- smooth zoom / pan (shared transform => never resets on swap) ---------- */
+const view = { s: 1, x: 0, y: 0 };        // animated
+const want = { s: 1, x: 0, y: 0 };        // target
+const MIN = 1, MAX = 14;
+
+function clampPan() {
+  // Keep the frame from flying off screen, measured against the letterboxed
+  // image box rather than the stage. Skipped when nothing has been laid out
+  // yet (zero-size host) so panning is never silently pinned to 0.
+  const w = stage.clientWidth, h = stage.clientHeight;
+  const im = imgs[shown];
+  if (!w || !h || !im || !im.offsetWidth) return;
+  const lx = Math.max(0, (im.offsetWidth * want.s - w) / 2);
+  const ly = Math.max(0, (im.offsetHeight * want.s - h) / 2);
+  want.x = Math.max(-lx, Math.min(lx, want.x));
+  want.y = Math.max(-ly, Math.min(ly, want.y));
+}
+
+function zoomAt(mx, my, factor) {
+  const r = stage.getBoundingClientRect();
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  const dx = mx - cx, dy = my - cy;
+  const s2 = Math.max(MIN, Math.min(MAX, want.s * factor));
+  const px = (dx - want.x) / want.s, py = (dy - want.y) / want.s;
+  want.s = s2;
+  want.x = dx - px * s2;
+  want.y = dy - py * s2;
+  clampPan();
+}
+
+function resetView() { want.s = 1; want.x = 0; want.y = 0; }
+
+stage.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0022));
+}, { passive: false });
+
+let drag = null;
+stage.addEventListener('pointerdown', e => {
+  drag = { x: e.clientX, y: e.clientY, ox: want.x, oy: want.y };
+  stage.setPointerCapture(e.pointerId);
+  stage.classList.add('drag');
+});
+stage.addEventListener('pointermove', e => {
+  if (!drag) return;
+  want.x = drag.ox + (e.clientX - drag.x);
+  want.y = drag.oy + (e.clientY - drag.y);
+  clampPan();
+});
+stage.addEventListener('pointerup', () => { drag = null; stage.classList.remove('drag'); });
+stage.addEventListener('dblclick', e => zoomAt(e.clientX, e.clientY, want.s > 1.02 ? 1 / want.s : 3));
+
+function pctLabel() {
+  const im = imgs[shown];
+  if (im && im.naturalWidth && im.offsetWidth)   // % of the file's real pixels
+    return Math.round(view.s * im.offsetWidth / im.naturalWidth * 100) + '%';
+  return '\u00d7' + view.s.toFixed(2);          // fallback: raw zoom factor
+}
+
+const resetBtn = bar.querySelector('.reset');
+
+function apply() {
+  stack.style.transform =
+    `translate3d(${view.x.toFixed(2)}px,${view.y.toFixed(2)}px,0) scale(${view.s.toFixed(4)})`;
+  stack.classList.toggle('px', view.s > 2.5);
+  bar.querySelector('.zm').textContent = pctLabel();
+  resetBtn.classList.toggle('live',
+    view.s > 1.001 || Math.abs(view.x) > .5 || Math.abs(view.y) > .5);
+}
+
+function stepAnim() {
+  const k = 0.18;
+  view.s += (want.s - view.s) * k;
+  view.x += (want.x - view.x) * k;
+  view.y += (want.y - view.y) * k;
+  if (Math.abs(want.s - view.s) < 1e-4) view.s = want.s;
+  if (Math.abs(want.x - view.x) < .05) view.x = want.x;
+  if (Math.abs(want.y - view.y) < .05) view.y = want.y;
+  apply();
+}
+
+/* One driver for the zoom lerp and Lenis. Prefers rAF, but falls back to a
+   timer if rAF never fires (headless / non-compositing hosts), so the viewer
+   still works there - just without the easing. */
+let forceTimer = false, lastTick = performance.now();
+function nextFrame(fn) {
+  if (!forceTimer && window.requestAnimationFrame) requestAnimationFrame(fn);
+  else setTimeout(() => fn(performance.now()), 16);
+}
+function loop(t) {
+  lastTick = performance.now();
+  stepAnim();
+  lenises.forEach(l => l.raf(t || lastTick));
+  nextFrame(loop);
+}
+setInterval(() => {
+  if (performance.now() - lastTick > 250) { forceTimer = true; nextFrame(loop); }
+}, 500);
+
+/* ---------- variant / row selection ---------- */
+function loadRow(r) {
+  if (r === loadedRow) return;
+  const row = ROWS[r];
+  VARIANTS.forEach(([vid], i) => imgs[i].setAttribute('src', row.imgs[vid] || ''));
+  loadedRow = r;
+  document.querySelectorAll('.railrow').forEach(el =>
+    el.classList.toggle('cur', +el.dataset.r === r));
+  sheet.querySelector('h2').innerHTML =
+    row.name + ' <span>' + row.label + '  &middot;  ' + row.w + '\u00d7' + row.h + '</span>';
+  sheet.querySelector('pre').textContent = row.prompt;
+}
+
+function show(v) {
+  shown = v;
+  imgs.forEach((im, i) => im.classList.toggle('on', i === v));
+  const row = ROWS[loadedRow];
+  bar.querySelector('.vid').textContent = VARIANTS[v][1];
+  bar.querySelector('.nm').textContent = row.name + '  ' + (row.imgs[VARIANTS[v][0]] || '');
+}
+
+function lock(r, v) {
+  if (!ROWS[r].imgs[VARIANTS[v][0]]) return;
+  loadRow(r);
+  locked = { r, v };
+  show(v);
+  document.querySelectorAll('.thumb').forEach(t =>
+    t.classList.toggle('sel', +t.dataset.r === r && +t.dataset.v === v));
+}
+
+/* Keep the keyboard selection on screen. Only keyboard navigation calls this:
+   hovering already puts the pointer on the thumbnail, and scrolling the rail
+   out from under the cursor would fight the user. Scrolls through Lenis when
+   it is driving the rail, otherwise sets scrollTop, and does nothing when the
+   row is already fully visible - so holding an arrow key does not jitter. */
+function revealRow(r) {
+  const el = document.querySelector('.railrow[data-r="' + r + '"]');
+  if (!el) return;
+  const pad = 14;
+  const rb = rail.getBoundingClientRect(), eb = el.getBoundingClientRect();
+  if (eb.top >= rb.top + pad && eb.bottom <= rb.bottom - pad) return;
+  const delta = eb.top < rb.top + pad
+    ? eb.top - rb.top - pad
+    : eb.bottom - rb.bottom + pad;
+  const lenis = (typeof lenises !== 'undefined') && lenises[0];
+  if (lenis && typeof lenis.scrollTo === 'function') {
+    const from = (typeof lenis.actualScroll === 'number') ? lenis.actualScroll : rail.scrollTop;
+    lenis.scrollTo(from + delta, { duration: 0.35 });
+  } else {
+    rail.scrollTop += delta;
+  }
+}
+
+function step(dv, dr) {
+  let { r, v } = locked;
+  for (let i = 0; i < 12; i++) {
+    v = (v + dv + VARIANTS.length) % VARIANTS.length;
+    r = (r + dr + ROWS.length) % ROWS.length;
+    if (ROWS[r].imgs[VARIANTS[v][0]]) break;
+  }
+  lock(r, v);
+  revealRow(r);
+}
+
+/* rail: hover previews, click keeps, leaving restores the kept frame */
+const rail = document.querySelector('.rail');
+rail.addEventListener('mouseover', e => {
+  const t = e.target.closest('.thumb');
+  if (!t) return;
+  const r = +t.dataset.r, v = +t.dataset.v;
+  if (!ROWS[r].imgs[VARIANTS[v][0]]) return;
+  loadRow(r); show(v);
+});
+rail.addEventListener('mouseleave', () => { loadRow(locked.r); show(locked.v); });
+rail.addEventListener('click', e => {
+  const t = e.target.closest('.thumb');
+  if (t) lock(+t.dataset.r, +t.dataset.v);
+});
+
+resetBtn.onclick = resetView;
+bar.querySelector('.pr').onclick = () => sheet.classList.toggle('open');
+
+/* ---------- keys: keyed off e.code so a Russian layout works too ---------- */
+addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const c = e.code;
+  if (c === 'Escape' || c === 'Digit0' || c === 'Numpad0' ||
+      c === 'BracketLeft' || c === 'BracketRight') { resetView(); e.preventDefault(); }
+  else if (c === 'ArrowRight') step(1, 0);
+  else if (c === 'ArrowLeft') step(-1, 0);
+  else if (c === 'ArrowDown') step(0, 1);
+  else if (c === 'ArrowUp') step(0, -1);
+  else if (c === 'KeyP') sheet.classList.toggle('open');
+  else if (c === 'Equal' || c === 'NumpadAdd')
+    zoomAt(innerWidth / 2, innerHeight / 2, 1.35);
+  else if (c === 'Minus' || c === 'NumpadSubtract')
+    zoomAt(innerWidth / 2, innerHeight / 2, 1 / 1.35);
+  else if (/^Digit[1-4]$/.test(c)) { lock(locked.r, +c.slice(5) - 1); revealRow(locked.r); }
+  else return;
+  if (c.startsWith('Arrow')) e.preventDefault();
+});
+
+/* ---------- Lenis: smooth scrolling for the rail and the prompt sheet ---------- */
+var lenises = [
+  new Lenis({ wrapper: rail, content: rail.querySelector('.railinner'),
+              duration: 0.9, smoothWheel: true }),
+  new Lenis({ wrapper: sheet, content: sheet.querySelector('.sheetinner'),
+              duration: 0.9, smoothWheel: true }),
+];
+
+lock(0, 0);
+apply();
+nextFrame(loop);
+</script></body></html>
