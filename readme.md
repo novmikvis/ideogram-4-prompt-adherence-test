@@ -3,7 +3,7 @@ Set of experiments to see difference between ideogram fast model and with applie
 
 <p align="left">
 <a href="https://novmikvis.github.io/ideogram-4-prompt-adherence-test/">
-  <img src="https://github.com/user-attachments/assets/4a0ef548-5e1b-4166-a859-cc276e244626" width="1000" alt="mrjackspade's Natural-Language Text-Encoder LoRA">
+  <img src="https://github.com/user-attachments/assets/e03cc2db-d4a9-4293-ad91-11afc2e84761" width="1000" alt="mrjackspade's Natural-Language Text-Encoder LoRA">
 </a>
 </p>
 
